@@ -3,13 +3,12 @@ name: Build Debug APK (No Cache)
 # ==============================================================================
 # Flujo de Integración Continua (CI/CD) para Pocket Engine
 # 
-# Características:
-# 1. Descarga el código completo del repositorio.
-# 2. Instala toolchains nativas completas: C++, Android NDK, CMake, Rust y Lua 5.4.
-# 3. Compilación 100% limpia SIN CACHÉ (evita artefactos residuales o desincronizados).
-# 4. Generación desatendida forzada de la firma Debug desde cero usando script .sh.
-# 5. Genera el APK Debug listo para descarga e instalación en teléfonos móviles
-#    a través de Uptodown, tiendas alternativas o descarga directa de artefactos.
+# Solución al error de sdkmanager:
+# - Se eliminó la acción deprecada 'android-actions/setup-android@v3' que fallaba
+#   al buscar el paquete obsoleto 'tools'.
+# - Se utiliza el Android SDK nativo preinstalado en el runner Ubuntu de GitHub,
+#   resolviendo dinámicamente cmdline-tools y configurando NDK 26.1.10909125.
+# - Compila Rust para 32 y 64 bits y genera el APK Debug sin caché con Gradle 9.3.1.
 # ==============================================================================
 
 on:
@@ -37,30 +36,52 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 2. Configuración de Java JDK 17 (Sin caché de Gradle)
-      - name: ☕ 2. Configurar Java JDK 17 (Temurin - Sin Caché)
+      # 2. Configurar Java JDK 21 (Sin caché de Gradle)
+      - name: ☕ 2. Configurar Java JDK 21 (Temurin - Sin Caché)
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
-          # Sin cache de Gradle como fue solicitado expresamente
+          java-version: '21'
           cache: ''
 
-      # 3. Configurar Android SDK, NDK y CMake
-      - name: 📱 3. Configurar Android SDK y NDK
-        uses: android-actions/setup-android@v3
-
-      - name: 📦 4. Descargar e instalar NDK y CMake de Android
+      # 3. Configurar Android SDK, NDK y CMake sin la acción con bug setup-android
+      - name: 📱 3. Configurar Android SDK, NDK y CMake
         run: |
+          echo "Configurando entorno de Android SDK..."
+          ANDROID_SDK_PATH="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_HOME=$ANDROID_SDK_PATH" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_PATH" >> $GITHUB_ENV
+          
+          # Localizar la versión más reciente de cmdline-tools disponible en el runner
+          CMDLINE_DIR=$(find "$ANDROID_SDK_PATH/cmdline-tools" -maxdepth 2 -name "bin" -type d | sort -V | tail -n 1)
+          if [ -n "$CMDLINE_DIR" ]; then
+            echo "cmdline-tools bin encontrado en: $CMDLINE_DIR"
+            echo "$CMDLINE_DIR" >> $GITHUB_PATH
+            echo "$ANDROID_SDK_PATH/platform-tools" >> $GITHUB_PATH
+            SDKM="$CMDLINE_DIR/sdkmanager"
+          else
+            SDKM="sdkmanager"
+          fi
+          
           echo "Aceptando licencias del Android SDK..."
-          yes | sdkmanager --licenses > /dev/null 2>&1 || true
-          echo "Instalando NDK y CMake..."
-          sdkmanager "ndk;26.1.10909125" "cmake;3.22.1"
-          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/26.1.10909125" >> $GITHUB_ENV
-          echo "ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/26.1.10909125" >> $GITHUB_ENV
+          yes | "$SDKM" --licenses > /dev/null 2>&1 || true
+          
+          NDK_VERSION="26.1.10909125"
+          CMAKE_VERSION="3.22.1"
+          
+          if [ -d "$ANDROID_SDK_PATH/ndk/$NDK_VERSION" ]; then
+            echo "✅ Android NDK $NDK_VERSION ya está presente en el sistema."
+          else
+            echo "📦 Instalando Android NDK $NDK_VERSION y CMake $CMAKE_VERSION..."
+            "$SDKM" "ndk;$NDK_VERSION" "cmake;$CMAKE_VERSION"
+          fi
+          
+          echo "ANDROID_NDK_HOME=$ANDROID_SDK_PATH/ndk/$NDK_VERSION" >> $GITHUB_ENV
+          echo "ANDROID_NDK_ROOT=$ANDROID_SDK_PATH/ndk/$NDK_VERSION" >> $GITHUB_ENV
+          echo "NDK configurado exitosamente en: $ANDROID_SDK_PATH/ndk/$NDK_VERSION"
 
-      # 5. Descargar dependencias de compilación para C++
-      - name: ⚙️ 5. Descargar dependencias de C++ (CMake, Ninja, Build-Essential)
+      # 4. Descargar dependencias de compilación para C++
+      - name: ⚙️ 4. Descargar dependencias de C++ (CMake, Ninja, Build-Essential)
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
@@ -69,10 +90,10 @@ jobs:
             ninja-build \
             pkg-config
 
-      # 6. Descargar e instalar Rust y toolchains para Android (32 y 64 bits)
-      - name: 🦀 6. Descargar e instalar Rust y arquitecturas Android (arm64, armv7, x86_64, x86)
+      # 5. Descargar e instalar Rust y toolchains para Android (32 y 64 bits)
+      - name: 🦀 5. Descargar e instalar Rust y arquitecturas Android (arm64, armv7, x86_64, x86)
         run: |
-          echo "Instalando Rust toolchain..."
+          echo "Configurando Rust stable toolchain..."
           rustup default stable
           rustup update
           echo "Añadiendo targets nativos de Android para Rust..."
@@ -81,10 +102,10 @@ jobs:
           rustup target add x86_64-linux-android
           rustup target add i686-linux-android
           echo "Instalando cargo-ndk..."
-          cargo install cargo-ndk --locked || true
+          cargo install cargo-ndk --locked || cargo install cargo-ndk || true
 
-      # 6.1 Compilar núcleo nativo Rust al no haber binarios .so en el repositorio público
-      - name: 🦀 6.1 Compilar núcleo Rust (pocketengine_core) para las 4 arquitecturas Android
+      # 6. Compilar núcleo nativo Rust al no haber binarios .so en el repositorio público
+      - name: 🦀 6. Compilar núcleo Rust (pocketengine_core) para las 4 arquitecturas Android
         working-directory: app/src/main/rust
         run: |
           echo "Compilando pocketengine_core para arm64-v8a, armeabi-v7a, x86_64 y x86..."
@@ -107,29 +128,28 @@ jobs:
           ./scripts/generate_debug_keystore.sh "$GITHUB_WORKSPACE/debug.keystore"
           ls -la "$GITHUB_WORKSPACE/debug.keystore"
 
-      # 9. Configurar Gradle oficial (con caché deshabilitada por solicitud)
-      - name: 🐘 9. Configurar Gradle (Caché desactivada)
+      # 9. Configurar Gradle oficial versión 9.3.1 (con caché deshabilitada por solicitud)
+      - name: 🐘 9. Configurar Gradle 9.3.1 (Caché desactivada)
         uses: gradle/actions/setup-gradle@v4
         with:
+          gradle-version: '9.3.1'
           cache-disabled: true
 
       # 10. Compilar APK Debug limpio sin caché
       - name: 🔨 10. Compilar APK Debug (assembleDebug sin caché)
         run: |
           echo "Iniciando compilación limpia de Pocket Engine APK Debug..."
-          gradle assembleDebug \
+          gradle :app:assembleDebug \
             --no-build-cache \
             --no-daemon \
-            --stacktrace \
-            --info
+            --stacktrace
 
-      # 11. Verificar y listar los APKs generados
+      # 11. Verificar y preparar el APK Debug generado
       - name: 🔍 11. Verificar APK Debug generado
         run: |
           echo "Listando archivos de salida en app/build/outputs/apk/debug/:"
           ls -lh app/build/outputs/apk/debug/
           
-          # Renombrar con timestamp y versión para facilidad de identificación móvil
           APK_PATH=$(find app/build/outputs/apk/debug -name "*.apk" | head -n 1)
           if [ -f "$APK_PATH" ]; then
             echo "APK generado exitosamente en: $APK_PATH"
