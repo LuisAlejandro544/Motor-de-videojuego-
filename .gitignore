@@ -1,0 +1,73 @@
+*.iml
+.gradle
+.kotlin
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+.env
+debug.keystore
+
+# ==============================================================================
+# C++ / NDK / CMake Build Artifacts & Temporary Files
+# ==============================================================================
+.cxx/
+**/.cxx/
+CMakeFiles/
+**/CMakeFiles/
+CMakeCache.txt
+**/CMakeCache.txt
+*.cmake
+!**/CMakeLists.txt
+build.ninja
+.ninja_*
+*.ninja
+*.o
+*.obj
+*.a
+*.d
+*.idb
+*.pdb
+*.ilk
+compile_commands.json
+.clang-format.bak
+
+# ==============================================================================
+# Rust / Cargo Build Artifacts & Caches
+# ==============================================================================
+target/
+**/target/
+**/*.rs.bk
+Cargo.lock.bak
+
+# ==============================================================================
+# Lua Installation & Build Temporaries
+# ==============================================================================
+*.tar.gz
+*.tgz
+*.tar
+*.zip
+*.7z
+luac.out
+lua-*/
+/tmp/lua*
+
+# ==============================================================================
+# Binarios Nativos Compartidos (.so) - Excluidos para mantener el repo público limpio
+# ==============================================================================
+*.so
+**/*.so
+app/src/main/jniLibs/**/*.so
+app/src/main/jniLibs/*/*.so
+!app/src/main/jniLibs/**/.gitkeep
+
+

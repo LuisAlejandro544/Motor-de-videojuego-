@@ -1,0 +1,6 @@
+{
+  "name": "Pocket Engine",
+  "description": "Motor de videojuegos móvil al estilo Pocket Code con interfaz de bloques visuales, editor de escenas y gestión de actores.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
